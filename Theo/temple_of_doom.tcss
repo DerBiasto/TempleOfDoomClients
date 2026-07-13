@@ -1,0 +1,60 @@
+Screen {
+  align: center middle;
+  layout: grid;
+}
+
+Label {
+  padding: 1;
+  height: auto;
+}
+
+Vertical {
+  align: center middle;
+  height: auto;
+  width: auto;
+}
+
+Button {
+  margin: 1 5;
+}
+
+#capacity {
+  width: auto;
+  margin: 2;
+}
+
+Input.-valid {
+  border: tall $success 60%;
+}
+
+Input.-valid:focus {
+  border: tall $success;
+}
+
+Pretty{
+  margin: 1 2;
+  width: auto;
+}
+
+Select {
+  width: 50;
+}
+
+VerticalScroll {
+  height: 20;
+  width: 100;
+}
+
+Horizontal {
+    width: auto;
+    height: auto;
+}
+
+Static {
+  width: auto;
+}
+
+#role_description {
+  width: auto;
+  max-width: 70;
+}
