@@ -58,3 +58,24 @@ Static {
   width: auto;
   max-width: 70;
 }
+
+.card {
+  width: 16;
+  margin: 0 2;
+  padding: 1 2;
+  color: black;
+  text-align: center;
+}
+
+.Treasure {
+  background: gold;
+}
+
+.Trap {
+  background: red;
+  color: white;
+}
+
+.Room {
+  background: grey;
+}
