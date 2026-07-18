@@ -1,0 +1,13 @@
+from textual.app import App
+from textual.widgets import Button
+
+class MyApp(App):
+    def compose(self):
+        yield Button("Click me", id="my_button")
+
+    def on_button_pressed(self, event: Button.Pressed):
+        btn = event.button
+        btn.label = "You clicked me"
+
+app = MyApp()
+app.run()
