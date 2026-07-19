@@ -1,2 +1,2 @@
-Matcha/Client/.venv
-Matcha/Server/.venv
+.venv
+__pycache__
