@@ -36,15 +36,12 @@ class LobbySelection(Screen):
             prompt="Choose the Lobby you want to join"
             )
             
-            lobbies = lib.list_lobbies()["response"]
+            old_lobbies = lib.list_lobbies()["response"]
             items = []
-            for lobby_name, lobby_data in lobbies.items():
-                player_str = " ".join(lobby_data["players"])
+            for lobby_name, lobby_data in old_lobbies.items():
+                player_str = ", ".join(lobby_data["players"])
                 items.append(ListItem(Horizontal(Label(lobby_name, classes="lobby_names"), Label(player_str, classes="players"), Label(f"{len(lobby_data["players"])}/{lobby_data["capacity"]}", classes="capacity")),classes="rows"))
             yield ListView(
-                ListItem(Label("One")),
-                ListItem(Label("Two")),
-                ListItem(Label("Three")),
                 *items
             )
 

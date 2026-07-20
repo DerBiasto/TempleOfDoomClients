@@ -1,5 +1,4 @@
 ListView Label {
-    text-style: bold;
     padding: 1;
 }
 
@@ -8,12 +7,14 @@ Horizontal {
 }
 
 .capacity {
-    width: 5;
+    width: 6;
     dock: right;
+    border-left: heavy rgb(126, 37, 37);
 }
 
 .lobby_names {
-    width: 32
+    width: 32;
+    border-right: heavy rgb(126, 37, 37);
 }
 
 .players {
@@ -23,4 +24,8 @@ Horizontal {
 .rows {
     padding-left: 2;
     padding-right: 2;
+}
+
+ListView {
+    border: heavy rgb(126, 37, 37);
 }
