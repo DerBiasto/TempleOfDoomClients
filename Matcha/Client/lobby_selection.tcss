@@ -1,0 +1,26 @@
+ListView Label {
+    text-style: bold;
+    padding: 1;
+}
+
+Horizontal {
+    height: 3;
+}
+
+.capacity {
+    width: 5;
+    dock: right;
+}
+
+.lobby_names {
+    width: 32
+}
+
+.players {
+    width: auto;
+}
+
+.rows {
+    padding-left: 2;
+    padding-right: 2;
+}

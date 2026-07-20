@@ -1,12 +1,14 @@
 from textual.app import App, ComposeResult
-from textual.containers import Vertical, Horizontal, ScrollableContainer
-from textual.widgets import Button, Label, Digits, Select, Static
+from textual.containers import Vertical, Horizontal
+from textual.widgets import Button, Label, Select, ListItem, ListView
 from textual.screen import Screen
 import lib
 #from textual import log
 
 class LobbySelection(Screen):
-    x = 12
+    
+    CSS_PATH = "lobby_selection.tcss"
+
     def compose(self) -> ComposeResult:
         with Vertical():
             yield Button(label="Create a new lobby", variant="success", id="new_lobby")
@@ -26,14 +28,34 @@ class LobbySelection(Screen):
             id="player_select",
             prompt="Choose how many players should be in your game"
             )
-            lobbies = lib.list_lobbies()
+            lobbies = lib.list_lobbies()["response"]
 
             yield  Select(
             options=[ (lbname + " " + repr(lbcont), lbname) for lbname, lbcont in lobbies.items()],
             id="lobby_select",
             prompt="Choose the Lobby you want to join"
             )
+            
+            lobbies = lib.list_lobbies()["response"]
+            items = []
+            for lobby_name, lobby_data in lobbies.items():
+                player_str = " ".join(lobby_data["players"])
+                items.append(ListItem(Horizontal(Label(lobby_name, classes="lobby_names"), Label(player_str, classes="players"), Label(f"{len(lobby_data["players"])}/{lobby_data["capacity"]}", classes="capacity")),classes="rows"))
+            yield ListView(
+                ListItem(Label("One")),
+                ListItem(Label("Two")),
+                ListItem(Label("Three")),
+                *items
+            )
 
+    #def on_mount(self):
+    #    self.set_interval(1, self.update_lobby_selection)
+
+    #def update_lobby_selection(self):
+    #    lobbies = lib.list_lobbies()["response"]
+    #    new_options=[ (lbname + " " + repr(lbcont), lbname) for lbname, lbcont in lobbies.items()]
+    #    self.query_one("#lobby_select").options = new_options
+    
     def on_select_changed(self, event: Select.Changed):
         yield event.value
     
@@ -63,7 +85,7 @@ class Waiting(Screen):
         self.set_interval(1, self.update_lobby_status)
     
     def update_lobby_status(self):
-        state: dict = lib.lobby_state()
+        state: dict = lib.lobby_state()["response"]
         players = ""
         for player in state["players"]:
             players += f"{player}\n"
