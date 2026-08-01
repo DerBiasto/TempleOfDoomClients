@@ -51,19 +51,9 @@ class LobbySelection(Screen):
         table = self.query_one(DataTable)
         table.cursor_type = "row"
         table.add_columns(("Name:", "name"), ("Players:", "players"), ("Capacity:", "capacity"))
-        response = lib.list_lobbies()
         self.rendered_lobbies = {}
-        if response["ok"]:
-            self.rendered_lobbies = response["response"]
-            rows = []
-            for lobby_name, lobby_data in self.rendered_lobbies.items():
-                player_str = ", ".join(lobby_data["players"])
-                rows.append((lobby_name, player_str, f"{len(lobby_data['players'])}/{lobby_data['capacity']}"))
-            for lobby_name, player_str, capacity in rows:
-                table.add_row(lobby_name, player_str, capacity, key=lobby_name)
-        else:
-            self.app.error_notifications(response["error"])
-        self.set_interval(1, self.update_lobby_list)
+        self.update_lobby_list()
+        self.set_interval(3, self.update_lobby_list)
         
     @work(thread=True, exclusive=True)
     def update_lobby_list(self):
