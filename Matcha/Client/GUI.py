@@ -1,8 +1,8 @@
-from textual import log
+from textual import log  # noqa: F401
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, DataTable, Label, ListItem, Select
+from textual.widgets import Button, DataTable, Label, Select
 
 import lib
 
@@ -153,6 +153,7 @@ class LobbySelection(Screen):
                 self.notify("The selected lobby isn't available anymore. Please reload your lobby list.", severity="error")
             else:
                 self.app.error_notifications(response["error"])
+
 class Waiting(Screen):
     def compose(self) -> ComposeResult:
         yield Label("", id="lobby_status")

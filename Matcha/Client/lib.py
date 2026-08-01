@@ -1,5 +1,7 @@
 from math import ceil
+
 import requests
+
 IP = "localhost"
 #IP = "127.0.0.1:8000"
 #IP = "10.255.22.215"
@@ -98,18 +100,6 @@ def get_lobby_name():
 def start_player():
     return get_players()[0]
 
-def treasures_found(starting=0):
-    moves = get_state(starting)
-    treasures = 0
-    for move in moves:
-        if list(move.keys()) == ["Choice"]:
-            if move['Choice'][1] == "Treasure":
-                treasures += 1
-    return treasures
-
-def count_moves(starting=0):
-    return len(get_state(starting))
-
 def total_traps_treasures(size):
     distribution = {
                     3 : (5, 2),
@@ -123,7 +113,7 @@ def total_traps_treasures(size):
     }   # Spieleranzahl : (Schätze, Fallen)
     return distribution[size]
 
-class gameState(object):
+class gameState:
     def __init__(self, players : list):
         self.size = len(players)
         self.number_moves = 0
