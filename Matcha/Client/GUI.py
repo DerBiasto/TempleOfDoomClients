@@ -54,6 +54,16 @@ class LobbySelection(Screen):
         self.rendered_lobbies = {}
         self.update_lobby_list()
         self.set_interval(3, self.update_lobby_list)
+
+    def set_interactibility(self, *, enable: bool):
+        if enable:
+            for button in self.query(Button):
+                button.disabled = False
+                self.query_one(DataTable).can_focus = True
+        else:
+            for button in self.query(Button):
+                button.disabled = True
+                self.query_one(DataTable).can_focus = False
         
     @work(thread=True, exclusive=True)
     def update_lobby_list(self):
@@ -79,11 +89,15 @@ class LobbySelection(Screen):
         yield event.value
     
     def on_button_pressed(self, event: Button.Pressed):
+        self.set_interactibility(enable=False)
+        self.query_one(DataTable).can_focus = False
         selected_capacity = self.query_one("#player_select").value
         if event.button.id == "new_lobby":
             self.initialize_lobby_creation(selected_capacity)
         elif event.button.id == "example_game":
             self.initialize_example_game_creation(selected_capacity)
+        else:
+            self.set_interactibility(enable=True)
 
     def _apply_lobby_updates(self, response: dict):
         table = self.query_one(DataTable)
@@ -124,12 +138,14 @@ class LobbySelection(Screen):
             self.app.push_screen(Waiting())
         else:
             self.app.error_notifications(response["error"])
+        self.set_interactibility(enable=True)
 
     def _validate_example_game_creation(self, response):
         if response["ok"]:
             self.app.push_screen(Game())
         else:
             self.app.error_notifications(response["error"])
+        self.set_interactibility(enable=True)
 
     def _validate_joining_lobby(self, response):
         if response["ok"]:
@@ -139,8 +155,10 @@ class LobbySelection(Screen):
                 self.notify("The selected lobby isn't available anymore. Please reload your lobby list.", severity="error")
             else:
                 self.app.error_notifications(response["error"])
+        self.set_interactibility(enable=True)
         
     def on_data_table_row_selected(self, event):
+        self.set_interactibility(enable=False)
         selected_lobby = event.row_key.value
         self.initialize_joining_lobby(selected_lobby)
 
