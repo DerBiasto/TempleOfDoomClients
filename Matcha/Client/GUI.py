@@ -1,58 +1,87 @@
+from textual import log
 from textual.app import App, ComposeResult
-from textual.containers import Vertical, Horizontal
-from textual.widgets import Button, Label, Select, ListItem, ListView
+from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
+from textual.widgets import Button, DataTable, Label, ListItem, Select
+
 import lib
-#from textual import log
+
+
+def diff_lobbies(old, new):
+    added_lobbies = new.keys() - old.keys()
+    removed_lobbies =  old.keys() - new.keys()
+
+    players_changed = set()
+
+    for lobby in old.keys() & new.keys():
+        if old[lobby]["players"] != new[lobby]["players"]:
+            players_changed.add(lobby)
+
+    return {
+        "added": added_lobbies,
+        "removed": removed_lobbies,
+        "changed": players_changed
+    }
+
 
 class LobbySelection(Screen):
     
     CSS_PATH = "lobby_selection.tcss"
 
     def compose(self) -> ComposeResult:
-        with Vertical():
-            yield Button(label="Create a new lobby", variant="success", id="new_lobby")
-            yield Button(label="Join an existing lobby", variant="success", id="join_lobby")
-            yield Button(label="Create an example game", variant="success", id="example_game")
-            yield  Select(
-            options=[
-                ("3 Players", 3),
-                ("4 Players", 4),
-                ("5 Players", 5),
-                ("6 Players", 6),
-                ("7 Players", 7),
-                ("8 Players", 8),
-                ("9 Players", 9),
-                ("10 Players", 10),
-                ],
-            id="player_select",
-            prompt="Choose how many players should be in your game"
-            )
-            lobbies = lib.list_lobbies()["response"]
+        yield Button(label="Create a new lobby", variant="success", id="new_lobby")
+        yield Button(label="Join an existing lobby", variant="success", id="join_lobby")
+        yield Button(label="Create an example game", variant="success", id="example_game")
+        yield  Select(
+        options=[
+            ("3 Players", 3),
+            ("4 Players", 4),
+            ("5 Players", 5),
+            ("6 Players", 6),
+            ("7 Players", 7),
+            ("8 Players", 8),
+            ("9 Players", 9),
+            ("10 Players", 10),
+            ],
+        id="player_select",
+        prompt="Choose how many players should be in your game"
+        )
+        lobbies = lib.list_lobbies()["response"]
 
-            yield  Select(
-            options=[ (lbname + " " + repr(lbcont), lbname) for lbname, lbcont in lobbies.items()],
-            id="lobby_select",
-            prompt="Choose the Lobby you want to join"
-            )
-            
-            old_lobbies = lib.list_lobbies()["response"]
-            items = []
-            for lobby_name, lobby_data in old_lobbies.items():
-                player_str = ", ".join(lobby_data["players"])
-                items.append(ListItem(Horizontal(Label(lobby_name, classes="lobby_names"), Label(player_str, classes="players"), Label(f"{len(lobby_data["players"])}/{lobby_data["capacity"]}", classes="capacity")),classes="rows"))
-            yield ListView(
-                *items
-            )
+        yield  Select(
+        options=[ (lbname + " " + repr(lbcont), lbname) for lbname, lbcont in lobbies.items()],
+        id="lobby_select",
+        prompt="Choose the Lobby you want to join"
+        )
+        
+        old_lobbies = lib.list_lobbies()["response"]
+        items = []
+        for lobby_name, lobby_data in old_lobbies.items():
+            player_str = ", ".join(lobby_data["players"])
+            items.append(ListItem(Horizontal(Label(lobby_name, classes="lobby_names"), Label(player_str, classes="players"), Label(f"{len(lobby_data["players"])}/{lobby_data["capacity"]}", classes="capacity")),classes="rows"))
+        '''yield Vertical(
+                Horizontal(
+                    Label(content="Lobby Name:", classes="lobby_names header"),
+                    Label(content="Players:", classes="players header"),
+                    Label(content="Capacity",classes="capacity header")
+                    ),
+                ListView(*items),
+            id="lobby_selector")'''
+        yield DataTable()
 
-    #def on_mount(self):
-    #    self.set_interval(1, self.update_lobby_selection)
-
-    #def update_lobby_selection(self):
-    #    lobbies = lib.list_lobbies()["response"]
-    #    new_options=[ (lbname + " " + repr(lbcont), lbname) for lbname, lbcont in lobbies.items()]
-    #    self.query_one("#lobby_select").options = new_options
-    
+    def on_mount(self):
+        table = self.query_one(DataTable)
+        table.cursor_type = "row"
+        table.add_columns(("Name:", "name"), ("Players:", "players"), ("Capacity:", "capacity"))
+        self.rendered_lobbies = lib.list_lobbies()["response"]
+        rows = []
+        for lobby_name, lobby_data in self.rendered_lobbies.items():
+            player_str = ", ".join(lobby_data["players"])
+            rows.append((lobby_name, player_str, f"{len(lobby_data["players"])}/{lobby_data["capacity"]}"))
+        for lobby_name, player_str, capacity in rows:
+            table.add_row(lobby_name, player_str, capacity, key=lobby_name)
+        self.set_interval(1, self.update_lobby_list)
+        
     def on_select_changed(self, event: Select.Changed):
         yield event.value
     
@@ -70,6 +99,45 @@ class LobbySelection(Screen):
         elif event.button.id == "example_game":
             lib.create_example_game(self.query_one("#player_select").value)  # ty:ignore[unresolved-attribute]
             self.app.push_screen(Game())
+
+    def update_lobby_list(self):
+        table = self.query_one(DataTable)
+        new_lobbies = lib.list_lobbies()["response"]
+        rows = []
+        difference = diff_lobbies(self.rendered_lobbies, new_lobbies)
+        added_lobbies: set = difference["added"]
+        removed_lobbies: set = difference["removed"]
+        changed_player_lists: set = difference["changed"]
+
+        for lobby_name in added_lobbies:
+            lobby_data = new_lobbies[lobby_name]
+            player_str = ", ".join(lobby_data["players"])
+            rows.append((lobby_name, player_str, f"{len(lobby_data["players"])}/{lobby_data["capacity"]}"))
+        for lobby_name, player_str, capacity in rows:
+            table.add_row(lobby_name, player_str, capacity, key=lobby_name)
+
+        #add remove logic later  
+
+        for lobby_name in changed_player_lists:
+            player_str = ", ".join(new_lobbies[lobby_name]["players"])
+            capacity = f"{len(new_lobbies[lobby_name]['players'])}/{new_lobbies[lobby_name]['capacity']}"
+
+            table.update_cell(
+                row_key=lobby_name, column_key="players", value=player_str, update_width=True
+            )
+            table.update_cell(
+                row_key=lobby_name, column_key="capacity", value=capacity, update_width=True
+            )
+
+        self.rendered_lobbies = new_lobbies
+
+        
+    def on_data_table_row_selected(self, event):
+        selected_lobby = event.row_key.value
+        if lib.join_lobby(selected_lobby)["ok"]:
+            self.app.push_screen(Waiting())
+        else:
+            pass #add error message later
 
 class Waiting(Screen):
     def compose(self) -> ComposeResult:
@@ -95,12 +163,6 @@ class Waiting(Screen):
         #    yield Label(str(self.x))
         #    yield Button(label="", variant="success", id="first", disabled = False)
         #    yield Button(label="Add 1", variant="success", id="second", disabled = False)
-
-    def on_button_pressed(self, event):
-        self.query_one(Label).update(str(""))
-        if event.button.id == "first":
-            btn = event.button
-            btn.label = "You clicked me"
 
 
 class Game(Screen):

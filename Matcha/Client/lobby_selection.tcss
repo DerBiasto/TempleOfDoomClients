@@ -1,4 +1,4 @@
-ListView Label {
+Vertical Label {
     padding: 1;
 }
 
@@ -9,12 +9,12 @@ Horizontal {
 .capacity {
     width: 6;
     dock: right;
-    border-left: heavy rgb(126, 37, 37);
+    border-left: heavy rgb(239, 243, 243);
 }
 
 .lobby_names {
     width: 32;
-    border-right: heavy rgb(126, 37, 37);
+    border-right: heavy rgb(239, 243, 243);
 }
 
 .players {
@@ -27,5 +27,31 @@ Horizontal {
 }
 
 ListView {
-    border: heavy rgb(126, 37, 37);
+    background: rgb(5, 11, 29);
+}
+
+.header {
+    background: rgb(42, 206, 206);
+}
+
+#lobby_selector{
+    border: heavy rgb(239, 243, 243);
+    background: white;
+}
+
+DataTable {
+    width: 50%;
+    height: 50%;
+}
+
+DataTable .datatable--header {
+    background: #383a94;
+    color: white;
+    text-style: bold;
+}
+
+DataTable > .datatable--header-hover {
+    /* Set background and color to match standard header styling */
+    background: #383a94;
+    color: white;
 }
