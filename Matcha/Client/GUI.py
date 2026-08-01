@@ -60,19 +60,30 @@ class LobbySelection(Screen):
         response = lib.list_lobbies()
         self.app.call_from_thread(self._apply_lobby_updates, response)
 
+    @work(thread=True, exclusive=True)
+    def initialize_lobby_creation(self, capacity):
+        response = lib.create_lobby(capacity)
+        self.app.call_from_thread(self._validate_lobby_creation, response)
+
+    @work(thread=True, exclusive=True)
+    def initialize_example_game_creation(self, capacity):
+        response = lib.create_example_game(capacity)
+        self.app.call_from_thread(self._validate_example_game_creation, response)
+
+    @work(thread=True, exclusive=True)
+    def initialize_joining_lobby(self, lobby_name):
+        response = lib.join_lobby(lobby_name)
+        self.app.call_from_thread(self._validate_joining_lobby, response)
+
     def on_select_changed(self, event: Select.Changed):
         yield event.value
     
     def on_button_pressed(self, event: Button.Pressed):
+        selected_capacity = self.query_one("#player_select").value
         if event.button.id == "new_lobby":
-            lib.create_lobby(self.query_one("#player_select").value)
-            self.app.push_screen(Waiting())
+            self.initialize_lobby_creation(selected_capacity)
         elif event.button.id == "example_game":
-            response = lib.create_example_game(self.query_one("#player_select").value)
-            if response["ok"]:
-                self.app.push_screen(Game())
-            else:
-                self.app.error_notifications(response["error"])
+            self.initialize_example_game_creation(selected_capacity)
 
     def _apply_lobby_updates(self, response: dict):
         table = self.query_one(DataTable)
@@ -107,10 +118,20 @@ class LobbySelection(Screen):
             self.rendered_lobbies = new_lobbies
         else:
             self.app.error_notifications(response["error"])
-        
-    def on_data_table_row_selected(self, event):
-        selected_lobby = event.row_key.value
-        response = lib.join_lobby(selected_lobby)
+
+    def _validate_lobby_creation(self, response):
+        if response["ok"]:
+            self.app.push_screen(Waiting())
+        else:
+            self.app.error_notifications(response["error"])
+
+    def _validate_example_game_creation(self, response):
+        if response["ok"]:
+            self.app.push_screen(Game())
+        else:
+            self.app.error_notifications(response["error"])
+
+    def _validate_joining_lobby(self, response):
         if response["ok"]:
             self.app.push_screen(Waiting())
         else:
@@ -118,6 +139,10 @@ class LobbySelection(Screen):
                 self.notify("The selected lobby isn't available anymore. Please reload your lobby list.", severity="error")
             else:
                 self.app.error_notifications(response["error"])
+        
+    def on_data_table_row_selected(self, event):
+        selected_lobby = event.row_key.value
+        self.initialize_joining_lobby(selected_lobby)
 
 class Waiting(Screen):
     def compose(self) -> ComposeResult:
@@ -147,17 +172,16 @@ class Waiting(Screen):
 class Game(Screen):
     def compose(self) -> ComposeResult:
         with Vertical():
-            yield Label(str(self.x))
+            yield Label(str())
             yield Button(label="", variant="success", id="first", disabled = False)
             yield Button(label="Add 1", variant="success", id="second", disabled = False)
         with Horizontal():
-            yield Label(str(self.x))
+            yield Label(str())
             yield Button(label="Add 1", variant="success", id="third", disabled = False)
             yield Button(label="Add 1", variant="success", id="forth", disabled = False)
 
     def on_button_pressed(self, event):
-        self.x += 1
-        self.query_one(Label).update(str(self.x))
+        self.query_one(Label).update(str())
         if event.button.id == "first":
             btn = event.button
             btn.label = "You clicked me"
