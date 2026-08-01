@@ -44,10 +44,10 @@ class LobbySelection(Screen):
             ("10 Players", 10),
             ],
         id="player_select",
-        prompt="Choose how many players should be in your game"
+        allow_blank=False
         )
+        """
         lobbies = lib.list_lobbies()["response"]
-
         yield  Select(
         options=[ (lbname + " " + repr(lbcont), lbname) for lbname, lbcont in lobbies.items()],
         id="lobby_select",
@@ -66,20 +66,25 @@ class LobbySelection(Screen):
                     Label(content="Capacity",classes="capacity header")
                     ),
                 ListView(*items),
-            id="lobby_selector")'''
+            id="lobby_selector")'''"""
         yield DataTable()
 
     def on_mount(self):
         table = self.query_one(DataTable)
         table.cursor_type = "row"
         table.add_columns(("Name:", "name"), ("Players:", "players"), ("Capacity:", "capacity"))
-        self.rendered_lobbies = lib.list_lobbies()["response"]
-        rows = []
-        for lobby_name, lobby_data in self.rendered_lobbies.items():
-            player_str = ", ".join(lobby_data["players"])
-            rows.append((lobby_name, player_str, f"{len(lobby_data["players"])}/{lobby_data["capacity"]}"))
-        for lobby_name, player_str, capacity in rows:
-            table.add_row(lobby_name, player_str, capacity, key=lobby_name)
+        response = lib.list_lobbies()
+        self.rendered_lobbies = {}
+        if response["ok"]:
+            self.rendered_lobbies = response["response"]
+            rows = []
+            for lobby_name, lobby_data in self.rendered_lobbies.items():
+                player_str = ", ".join(lobby_data["players"])
+                rows.append((lobby_name, player_str, f"{len(lobby_data["players"])}/{lobby_data["capacity"]}"))
+            for lobby_name, player_str, capacity in rows:
+                table.add_row(lobby_name, player_str, capacity, key=lobby_name)
+        else:
+            self.app.error_notifications(response["error"])
         self.set_interval(1, self.update_lobby_list)
         
     def on_select_changed(self, event: Select.Changed):
@@ -97,73 +102,81 @@ class LobbySelection(Screen):
                 lib.join_lobby(selected_lobby)  # ty:ignore[unresolved-attribute]
                 self.app.push_screen(Waiting())
         elif event.button.id == "example_game":
-            lib.create_example_game(self.query_one("#player_select").value)  # ty:ignore[unresolved-attribute]
-            self.app.push_screen(Game())
+            response = lib.create_example_game(self.query_one("#player_select").value)  # ty:ignore[unresolved-attribute]
+            if response["ok"]:
+                self.app.push_screen(Game())
+            else:
+                self.app.error_notifications(response["error"])
 
     def update_lobby_list(self):
         table = self.query_one(DataTable)
-        new_lobbies = lib.list_lobbies()["response"]
-        rows = []
-        difference = diff_lobbies(self.rendered_lobbies, new_lobbies)
-        added_lobbies: set = difference["added"]
-        removed_lobbies: set = difference["removed"]
-        changed_player_lists: set = difference["changed"]
+        response = lib.list_lobbies()
+        if response["ok"]:
+            new_lobbies = response["response"]
+            rows = []
+            difference = diff_lobbies(self.rendered_lobbies, new_lobbies)
+            added_lobbies: set = difference["added"]
+            removed_lobbies: set = difference["removed"]
+            changed_player_lists: set = difference["changed"]
 
-        for lobby_name in added_lobbies:
-            lobby_data = new_lobbies[lobby_name]
-            player_str = ", ".join(lobby_data["players"])
-            rows.append((lobby_name, player_str, f"{len(lobby_data["players"])}/{lobby_data["capacity"]}"))
-        for lobby_name, player_str, capacity in rows:
-            table.add_row(lobby_name, player_str, capacity, key=lobby_name)
+            for lobby_name in added_lobbies:
+                lobby_data = new_lobbies[lobby_name]
+                player_str = ", ".join(lobby_data["players"])
+                rows.append((lobby_name, player_str, f"{len(lobby_data["players"])}/{lobby_data["capacity"]}"))
+            for lobby_name, player_str, capacity in rows:
+                table.add_row(lobby_name, player_str, capacity, key=lobby_name)
 
-        #add remove logic later  
+            for lobby_name in removed_lobbies:
+                table.remove_row(lobby_name)
 
-        for lobby_name in changed_player_lists:
-            player_str = ", ".join(new_lobbies[lobby_name]["players"])
-            capacity = f"{len(new_lobbies[lobby_name]['players'])}/{new_lobbies[lobby_name]['capacity']}"
+            for lobby_name in changed_player_lists:
+                player_str = ", ".join(new_lobbies[lobby_name]["players"])
+                capacity = f"{len(new_lobbies[lobby_name]['players'])}/{new_lobbies[lobby_name]['capacity']}"
 
-            table.update_cell(
-                row_key=lobby_name, column_key="players", value=player_str, update_width=True
-            )
-            table.update_cell(
-                row_key=lobby_name, column_key="capacity", value=capacity, update_width=True
-            )
-
-        self.rendered_lobbies = new_lobbies
-
+                table.update_cell(
+                    row_key=lobby_name, column_key="players", value=player_str, update_width=True
+                )
+                table.update_cell(
+                    row_key=lobby_name, column_key="capacity", value=capacity, update_width=True
+                )
+            self.rendered_lobbies = new_lobbies
+        else:
+            self.app.error_notifications(response["error"])
         
     def on_data_table_row_selected(self, event):
         selected_lobby = event.row_key.value
-        if lib.join_lobby(selected_lobby)["ok"]:
+        response = lib.join_lobby(selected_lobby)
+        if response["ok"]:
             self.app.push_screen(Waiting())
         else:
-            pass #add error message later
-
+            if response["error"] == "HTTPError":
+                self.notify("The selected lobby isn't available anymore. Please reload your lobby list.", severity="error")
+            else:
+                self.app.error_notifications(response["error"])
 class Waiting(Screen):
     def compose(self) -> ComposeResult:
-        self.status = Label("", id="lobby_status")
-        yield self.status
-        self.player_list = Label(content="", id="player_list")
-        yield self.player_list        
+        yield Label("", id="lobby_status")
+        yield Label(content="", id="player_list")       
     
     def on_mount(self):
         self.set_interval(1, self.update_lobby_status)
     
     def update_lobby_status(self):
-        state: dict = lib.lobby_state()["response"]
-        players = ""
-        for player in state["players"]:
-            players += f"{player}\n"
-        n_players: int = len(players)
-        capacity: int = state["capacity"]
-        players_to_start = capacity - n_players
-        #self.status.update(f"{players} {n_players}/{capacity} Players")
-        self.query_one("#lobby_status").update(f"The following players are currently waiting in the Lobby:\n{players}\n{players_to_start} are still needed for the game to start")
-        #with Vertical():
-        #    yield Label(str(self.x))
-        #    yield Button(label="", variant="success", id="first", disabled = False)
-        #    yield Button(label="Add 1", variant="success", id="second", disabled = False)
-
+        #add check if game has started later
+        response: dict = lib.lobby_state()
+        if response["ok"] and response["response"]:
+            state = response["response"]
+            players_str = ""
+            for player in state["players"]:
+                players_str += f"{player}\n"
+            n_players: int = len(state["players"])
+            capacity: int = state["capacity"]
+            players_to_start = capacity - n_players
+            self.query_one("#lobby_status").update(f"The following players are currently waiting in the Lobby:\n{players_str}\n{players_to_start} are still needed for the game to start")
+        elif response["ok"] and not response["response"]:
+            self.app.push_screen(Game())
+        elif not response["ok"]:
+            self.app.errror_notifications(response["error"])
 
 class Game(Screen):
     x = 12
@@ -185,6 +198,14 @@ class Game(Screen):
             btn.label = "You clicked me"
 
 class TempleOfDoom(App):
+    def error_notifications(self, error: str):
+        if error == "ConnectionError":
+            self.notify("The server is currently unavailable. Please try again or adjust your Server-IP", severity="error")
+        elif error == "Timeout":
+            self.notify("The connection to the server has timed out.", severity="error")
+        else:
+            self.notify(error, severity="error")
+
     def on_mount(self):
         self.push_screen(LobbySelection())
 
