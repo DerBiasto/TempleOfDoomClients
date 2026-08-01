@@ -30,7 +30,6 @@ class LobbySelection(Screen):
 
     def compose(self) -> ComposeResult:
         yield Button(label="Create a new lobby", variant="success", id="new_lobby")
-        yield Button(label="Join an existing lobby", variant="success", id="join_lobby")
         yield Button(label="Create an example game", variant="success", id="example_game")
         yield  Select(
         options=[
@@ -46,27 +45,6 @@ class LobbySelection(Screen):
         id="player_select",
         allow_blank=False
         )
-        """
-        lobbies = lib.list_lobbies()["response"]
-        yield  Select(
-        options=[ (lbname + " " + repr(lbcont), lbname) for lbname, lbcont in lobbies.items()],
-        id="lobby_select",
-        prompt="Choose the Lobby you want to join"
-        )
-        
-        old_lobbies = lib.list_lobbies()["response"]
-        items = []
-        for lobby_name, lobby_data in old_lobbies.items():
-            player_str = ", ".join(lobby_data["players"])
-            items.append(ListItem(Horizontal(Label(lobby_name, classes="lobby_names"), Label(player_str, classes="players"), Label(f"{len(lobby_data["players"])}/{lobby_data["capacity"]}", classes="capacity")),classes="rows"))
-        '''yield Vertical(
-                Horizontal(
-                    Label(content="Lobby Name:", classes="lobby_names header"),
-                    Label(content="Players:", classes="players header"),
-                    Label(content="Capacity",classes="capacity header")
-                    ),
-                ListView(*items),
-            id="lobby_selector")'''"""
         yield DataTable()
 
     def on_mount(self):
@@ -92,17 +70,10 @@ class LobbySelection(Screen):
     
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "new_lobby":
-            lib.create_lobby(self.query_one("#player_select").value)  # ty:ignore[unresolved-attribute]
+            lib.create_lobby(self.query_one("#player_select").value)
             self.app.push_screen(Waiting())
-        elif event.button.id == "join_lobby":
-            selected_lobby = self.query_one("#lobby_select").value
-            self.app.log("Value of selected_lobby:", selected_lobby)
-            if selected_lobby is not Select.NULL:
-                self.app.log("if-statement executed")
-                lib.join_lobby(selected_lobby)  # ty:ignore[unresolved-attribute]
-                self.app.push_screen(Waiting())
         elif event.button.id == "example_game":
-            response = lib.create_example_game(self.query_one("#player_select").value)  # ty:ignore[unresolved-attribute]
+            response = lib.create_example_game(self.query_one("#player_select").value)
             if response["ok"]:
                 self.app.push_screen(Game())
             else:
@@ -180,7 +151,6 @@ class Waiting(Screen):
             self.app.errror_notifications(response["error"])
 
 class Game(Screen):
-    x = 12
     def compose(self) -> ComposeResult:
         with Vertical():
             yield Label(str(self.x))
