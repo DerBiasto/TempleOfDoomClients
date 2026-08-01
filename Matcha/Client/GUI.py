@@ -1,4 +1,4 @@
-from textual import log  # noqa: F401
+from textual import log, work  # noqa: F401
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
@@ -58,13 +58,18 @@ class LobbySelection(Screen):
             rows = []
             for lobby_name, lobby_data in self.rendered_lobbies.items():
                 player_str = ", ".join(lobby_data["players"])
-                rows.append((lobby_name, player_str, f"{len(lobby_data["players"])}/{lobby_data["capacity"]}"))
+                rows.append((lobby_name, player_str, f"{len(lobby_data['players'])}/{lobby_data['capacity']}"))
             for lobby_name, player_str, capacity in rows:
                 table.add_row(lobby_name, player_str, capacity, key=lobby_name)
         else:
             self.app.error_notifications(response["error"])
         self.set_interval(1, self.update_lobby_list)
         
+    @work(thread=True, exclusive=True)
+    def update_lobby_list(self):
+        response = lib.list_lobbies()
+        self.app.call_from_thread(self._apply_lobby_updates, response)
+
     def on_select_changed(self, event: Select.Changed):
         yield event.value
     
@@ -79,9 +84,8 @@ class LobbySelection(Screen):
             else:
                 self.app.error_notifications(response["error"])
 
-    def update_lobby_list(self):
+    def _apply_lobby_updates(self, response: dict):
         table = self.query_one(DataTable)
-        response = lib.list_lobbies()
         if response["ok"]:
             new_lobbies = response["response"]
             rows = []
