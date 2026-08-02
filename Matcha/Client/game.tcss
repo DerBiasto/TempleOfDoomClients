@@ -1,0 +1,10 @@
+#game_stats {
+    background: $background;
+    height: auto;
+}
+
+#game_stats Static {
+    width: 1fr;
+    border: solid $accent;
+    content-align: center middle;
+}

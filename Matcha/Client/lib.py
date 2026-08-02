@@ -113,7 +113,7 @@ def total_traps_treasures(size):
     }   # Spieleranzahl : (Schätze, Fallen)
     return distribution[size]
 
-class gameState:
+class GameState:
     def __init__(self, players : list):
         self.size = len(players)
         self.number_moves = 0
@@ -128,6 +128,7 @@ class gameState:
         self.n_cards_left: list = []
         self.moves: list = []
         self.game_phase = "announcing"
+        self.required_treasures, self.required_traps = total_traps_treasures(self.size)
 
     def update(self, new_move: dict):
         self.number_moves += 1

@@ -45,13 +45,13 @@ DataTable {
 }
 
 DataTable .datatable--header {
-    background: #383a94;
+    background: $panel;
     color: white;
     text-style: bold;
 }
 
 DataTable > .datatable--header-hover {
     /* Set background and color to match standard header styling */
-    background: #383a94;
+    background: $panel;
     color: white;
 }

@@ -2,7 +2,8 @@ from textual import log, work  # noqa: F401
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, DataTable, Label, Select
+from textual.theme import Theme
+from textual.widgets import Button, DataTable, Header, Label, Select, Static
 
 import lib
 
@@ -29,8 +30,9 @@ class LobbySelection(Screen):
     CSS_PATH = "lobby_selection.tcss"
 
     def compose(self) -> ComposeResult:
-        yield Button(label="Create a new lobby", variant="success", id="new_lobby")
-        yield Button(label="Create an example game", variant="success", id="example_game")
+        yield Button(label="Create a new lobby", variant="primary", id="new_lobby")
+        yield Button(label="Create an example game", variant="primary", id="example_game")
+        yield Button(label="Refresh", variant="primary", id="refresh")
         yield  Select(
         options=[
             ("3 Players", 3),
@@ -53,7 +55,7 @@ class LobbySelection(Screen):
         table.add_columns(("Name:", "name"), ("Players:", "players"), ("Capacity:", "capacity"))
         self.rendered_lobbies = {}
         self.update_lobby_list()
-        self.set_interval(3, self.update_lobby_list)
+        self.set_interval(30, self.update_lobby_list)
 
     def set_interactibility(self, *, enable: bool):
         if enable:
@@ -96,6 +98,9 @@ class LobbySelection(Screen):
             self.initialize_lobby_creation(selected_capacity)
         elif event.button.id == "example_game":
             self.initialize_example_game_creation(selected_capacity)
+        elif event.button.id == "refresh":
+            self.update_lobby_list()
+            self.set_interactibility(enable=True)
         else:
             self.set_interactibility(enable=True)
 
@@ -165,14 +170,32 @@ class LobbySelection(Screen):
 class Waiting(Screen):
     def compose(self) -> ComposeResult:
         yield Label("", id="lobby_status")
-        yield Label(content="", id="player_list")       
+        yield Label(content="", id="player_list")
+        yield Button(label="Leave Lobby", variant="warning", id="leave_lobby")
     
     def on_mount(self):
-        self.set_interval(1, self.update_lobby_status)
+        self.initialize_update_lobby_status()
+        self.set_interval(1, self.initialize_update_lobby_status)
+
+    def on_button_pressed(self, event: Button.Pressed):
+        event.button.disabled = True
+        if event.button.id == "leave_lobby":
+            self.initialize_leave_lobby()
+        else:
+            event.button.disabled = False
     
-    def update_lobby_status(self):
-        #add check if game has started later
+    @work(thread=True, exclusive=True)
+    def initialize_update_lobby_status(self):
         response: dict = lib.lobby_state()
+        self.app.call_from_thread(self._update_lobby_status, response)
+
+    @work(thread=True, exclusive=True)
+    def initialize_leave_lobby(self):
+        response = lib.leave_lobby()
+        self.app.call_from_thread(self._validate_leave_lobby, response)
+
+    def _update_lobby_status(self, response):
+        #add check if game has started later
         if response["ok"] and response["response"]:
             state = response["response"]
             players_str = ""
@@ -183,26 +206,125 @@ class Waiting(Screen):
             players_to_start = capacity - n_players
             self.query_one("#lobby_status").update(f"The following players are currently waiting in the Lobby:\n{players_str}\n{players_to_start} are still needed for the game to start")
         elif response["ok"] and not response["response"]:
-            self.app.push_screen(Game())
+            self.app.switch_screen(Game())
         elif not response["ok"]:
             self.app.errror_notifications(response["error"])
 
+    def _validate_leave_lobby(self, response):
+        if response["ok"]:
+            self.app.pop_screen()
+        else:
+            self.app.error_notifications(response["error"])
+        self.query_one("#leave_lobby").disabled = False
+
 class Game(Screen):
+
+    CSS_PATH = "game.tcss"
+
     def compose(self) -> ComposeResult:
-        with Vertical():
-            yield Label(str())
-            yield Button(label="", variant="success", id="first", disabled = False)
-            yield Button(label="Add 1", variant="success", id="second", disabled = False)
-        with Horizontal():
-            yield Label(str())
-            yield Button(label="Add 1", variant="success", id="third", disabled = False)
-            yield Button(label="Add 1", variant="success", id="forth", disabled = False)
+        yield Header()
+        yield Horizontal(
+            Static("Your Role:", id="role"),
+            Static("Round:", id="round"),
+            Static("Game Phase:", id="game_phase"),
+            Static("Treasures", id="treasures"),
+            Static("Traps", id="traps"),
+            id="game_stats"
+            )
+
+    def on_mount(self):
+        self.initialize_game_state()
+        #self.initialize_game_state_update()
+        #self.set_interval(5, self.initialize_game_state_update())
 
     def on_button_pressed(self, event):
-        self.query_one(Label).update(str())
-        if event.button.id == "first":
-            btn = event.button
-            btn.label = "You clicked me"
+        pass
+
+    @work(thread=True, exclusive=True)
+    def initialize_game_state(self):
+        response = lib.get_players()
+        self.app.call_from_thread(log, f"Reached initialize_game_state,")
+        if response["ok"]:
+            players = response["response"]
+            self.app.call_from_thread(self._apply_game_state, players)
+        else:
+            self.app.call_from_thread(self.app.error_notifications, response["error"])
+
+    @work(thread=True, exclusive=True)
+    def initialize_game_state_update(self):
+        self.app.call_from_thread(log, f"Reached initialize update")
+        response = lib.get_state(starting=self.game_state.number_moves)
+        self.app.call_from_thread(self._apply_game_state_update, response)
+
+    def _apply_game_state(self, players):
+        self.game_state = lib.GameState(players)
+        log(f"The current round is {self.game_state.number_moves}")
+        self.initialize_game_state_update()
+        self.set_interval(5, self.initialize_game_state_update)
+
+    def _apply_game_state_update(self, response):
+        if response["ok"]:
+            new_moves = response["response"]
+            for move in new_moves:
+                self.game_state.update(move)
+            #self.app.sub_title = f"Round: {self.game_state.current_round}            {self.game_state.treasures}/{self.game_state.required_treasures} Treasures    {self.game_state.traps}/{self.game_state.required_traps} Traps"
+            self.query_one("#round").update(f"Round: {self.game_state.current_round}")
+            self.query_one("#game_phase").update(f"Game Phase: {self.game_state.game_phase}")
+            self.query_one("#treasures").update(f"{self.game_state.treasures}/{self.game_state.required_treasures} Treasures")
+            self.query_one("#traps").update(f"{self.game_state.traps}/{self.game_state.required_traps} Traps")
+        else:
+            self.app.error_notifications(response["error"])
+
+    #def _finalize_game_state(self):
+
+turquoise_greenery= Theme(
+	name="turquoise_greenery",
+	primary="#CFD7D7FF",
+	secondary="#00F5FFFF",
+	accent="#FB2C00FF",
+	background="#121212FF",
+	foreground="#EDEDEDFF",
+	surface="#1E1E1EFF",
+	panel="#005F64FF",
+	success="#00AF84FF",
+	warning="#362321FF",
+	error="#00FEFFFF",
+	dark=True,
+	variables={},
+)
+
+turquoise_ocean_theme = Theme(
+    name="turquoise_ocean_theme",
+    primary="#1BCFCFFF",       # bright turquoise
+    secondary="#0AA7B8FF",     # deeper teal for contrast
+    accent="#FF7A4BFF",        # warm coral accent for balance
+    background="#0D1A1CFF",    # deep ocean blue-black
+    foreground="#E8FDFEFF",    # soft near-white with a cool tint
+    surface="#142628FF",       # slightly lighter than background
+    panel="#0E4F55FF",         # muted teal panel
+    success="#1ED8A0FF",       # minty success green
+    warning="#4A3A1FFF",       # earthy warning brown
+    error="#00C7D9FF",         # sharp cyan error (fits turquoise theme)
+    dark=True,
+    variables={}
+)
+
+pulse_inspired_theme = Theme(
+    name="pulse_inspired_theme",
+    primary="#00E0FFFF",       # bright electric cyan glow
+    secondary="#0098AFFF",     # deeper teal for structure
+    accent="#FF3D7FFF",        # neon magenta accent (Pulse uses neon contrast)
+    background="#0A0F14FF",    # deep slate/ink background
+    foreground="#E8F9FFFF",    # cool white with slight cyan tint
+    surface="#111A22FF",       # elevated dark surface
+    panel="#0F3C47FF",         # muted teal panel
+    success="#00D9A0FF",       # glowing mint success
+    warning="#4A3A20FF",       # warm amber warning
+    error="#00B7CFFF",         # sharp cyan error (fits Pulse aesthetic)
+    dark=True,
+    variables={}
+)
+
 
 class TempleOfDoom(App):
     def error_notifications(self, error: str):
@@ -214,6 +336,10 @@ class TempleOfDoom(App):
             self.notify(error, severity="error")
 
     def on_mount(self):
+        self.register_theme(turquoise_greenery)
+        self.register_theme(turquoise_ocean_theme)
+        self.register_theme(pulse_inspired_theme)
+        self.theme = "pulse_inspired_theme"
         self.push_screen(LobbySelection())
 
 if __name__ == "__main__":
