@@ -48,8 +48,6 @@ def get_players():
 def get_state(starting: int =0):             # Returns moves that have been made since the n-th move
     return get(f"game/get/state?starting={starting}")
 
-
-
 #Lobbies
 
 def list_lobbies():
@@ -69,8 +67,6 @@ def leave_lobby():
 
 def lobby_state():
     return get("lobby/state")
-
-
 
 # Moves
 
