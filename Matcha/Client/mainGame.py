@@ -1,5 +1,7 @@
-import lib
 import time
+
+import lib
+
 
 def lobby_wait():
     print('Waiting for game to start')
