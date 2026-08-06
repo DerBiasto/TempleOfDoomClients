@@ -7,7 +7,7 @@ IP = "localhost"
 #IP = "10.255.22.215"
 #IP = "10.255.22.153"
 
-client = httpx.Client()
+client = httpx.AsyncClient()
 
 #Players
 
@@ -16,13 +16,13 @@ async def get(path: str):
         r = await client.get(f"http://{IP}/" + path, timeout=5)
         r.raise_for_status()
         if not r.text:
-            return {"ok" : True, "response" : r.reason}
+            return {"ok" : True, "response" : r.reason_phrase}
         return {"ok" : True, "response" : r.json()}
-    except httpx.exceptions.Timeout as e:
+    except httpx.TimeoutException as e:
         return {"ok" : False, "error" : "Timeout", "details" : str(e)}
-    except httpx.exceptions.ConnectionError as e:
+    except httpx.ConnectError as e:
         return {"ok" : False, "error" : "ConnectionError", "details" : str(e)}
-    except httpx.exceptions.HTTPError as e:
+    except httpx.HTTPStatusError as e:
         return {"ok" : False, "error" : "HTTPError", "details" : str(e)}
 
 async def post(path: str):
@@ -30,13 +30,13 @@ async def post(path: str):
         r = await client.post(f"http://{IP}/" + path, timeout=5)
         r.raise_for_status()
         if not r.text:
-            return {"ok" : True, "response" : r.reason}
+            return {"ok" : True, "response" : r.reason_phrase}
         return {"ok" : True, "response" : r.json()}
-    except httpx.exceptions.Timeout as e:
+    except httpx.TimeoutException as e:
         return {"ok" : False, "error" : "Timeout", "details" : str(e)}
-    except httpx.exceptions.ConnectionError as e:
+    except httpx.ConnectError as e:
         return {"ok" : False, "error" : "ConnectionError", "details" : str(e)}
-    except httpx.exceptions.HTTPError as e:
+    except httpx.HTTPStatusError as e:
         return {"ok" : False, "error" : "HTTPError", "details" : str(e)}
 
 def create_example_game(n: int = 5):

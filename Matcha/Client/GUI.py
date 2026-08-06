@@ -5,7 +5,7 @@ from textual.screen import Screen
 from textual.theme import Theme
 from textual.widgets import Button, DataTable, Header, Label, Select, Static
 
-import lib
+import libhttpx
 
 
 def diff_lobbies(old, new):
@@ -67,44 +67,9 @@ class LobbySelection(Screen):
                 button.disabled = True
                 self.query_one(DataTable).can_focus = False
         
-    @work(thread=True, exclusive=True)
-    def update_lobby_list(self):
-        response = lib.list_lobbies()
-        self.app.call_from_thread(self._apply_lobby_updates, response)
-
-    @work(thread=True, exclusive=True)
-    def initialize_lobby_creation(self, capacity):
-        response = lib.create_lobby(capacity)
-        self.app.call_from_thread(self._validate_lobby_creation, response)
-
-    @work(thread=True, exclusive=True)
-    def initialize_example_game_creation(self, capacity):
-        response = lib.create_example_game(capacity)
-        self.app.call_from_thread(self._validate_example_game_creation, response)
-
-    @work(thread=True, exclusive=True)
-    def initialize_joining_lobby(self, lobby_name):
-        response = lib.join_lobby(lobby_name)
-        self.app.call_from_thread(self._validate_joining_lobby, response)
-
-    def on_select_changed(self, event: Select.Changed):
-        yield event.value
-    
-    def on_button_pressed(self, event: Button.Pressed):
-        self.set_interactibility(enable=False)
-        self.query_one(DataTable).can_focus = False
-        selected_capacity = self.query_one("#player_select").value
-        if event.button.id == "new_lobby":
-            self.initialize_lobby_creation(selected_capacity)
-        elif event.button.id == "example_game":
-            self.initialize_example_game_creation(selected_capacity)
-        elif event.button.id == "refresh":
-            self.update_lobby_list()
-            self.set_interactibility(enable=True)
-        else:
-            self.set_interactibility(enable=True)
-
-    def _apply_lobby_updates(self, response: dict):
+    @work
+    async def update_lobby_list(self):
+        response = await libhttpx.list_lobbies()
         table = self.query_one(DataTable)
         if response["ok"]:
             new_lobbies = response["response"]
@@ -138,21 +103,27 @@ class LobbySelection(Screen):
         else:
             self.app.error_notifications(response["error"])
 
-    def _validate_lobby_creation(self, response):
+    @work(exclusive=True)
+    async def lobby_creation(self, capacity):
+        response = await libhttpx.create_lobby(capacity)
         if response["ok"]:
             self.app.push_screen(Waiting())
         else:
             self.app.error_notifications(response["error"])
         self.set_interactibility(enable=True)
 
-    def _validate_example_game_creation(self, response):
+    @work(exclusive=True)
+    async def example_game_creation(self, capacity):
+        response = await libhttpx.create_example_game(capacity)
         if response["ok"]:
             self.app.push_screen(Game())
         else:
             self.app.error_notifications(response["error"])
         self.set_interactibility(enable=True)
 
-    def _validate_joining_lobby(self, response):
+    @work(exclusive=True)
+    async def joining_lobby(self, lobby_name):
+        response = await libhttpx.join_lobby(lobby_name)
         if response["ok"]:
             self.app.push_screen(Waiting())
         else:
@@ -161,11 +132,28 @@ class LobbySelection(Screen):
             else:
                 self.app.error_notifications(response["error"])
         self.set_interactibility(enable=True)
-        
-    def on_data_table_row_selected(self, event):
+
+    def on_select_changed(self, event: Select.Changed):
+        yield event.value
+    
+    def on_button_pressed(self, event: Button.Pressed):
+        self.set_interactibility(enable=False)
+        self.query_one(DataTable).can_focus = False
+        selected_capacity = self.query_one("#player_select").value
+        if event.button.id == "new_lobby":
+            self.lobby_creation(selected_capacity)
+        elif event.button.id == "example_game":
+            self.example_game_creation(selected_capacity)
+        elif event.button.id == "refresh":
+            self.update_lobby_list()
+            self.set_interactibility(enable=True)
+        else:
+            self.set_interactibility(enable=True)
+
+def on_data_table_row_selected(self, event):
         self.set_interactibility(enable=False)
         selected_lobby = event.row_key.value
-        self.initialize_joining_lobby(selected_lobby)
+        self.joining_lobby(selected_lobby)
 
 class Waiting(Screen):
     def compose(self) -> ComposeResult:
@@ -174,28 +162,19 @@ class Waiting(Screen):
         yield Button(label="Leave Lobby", variant="warning", id="leave_lobby")
     
     def on_mount(self):
-        self.initialize_update_lobby_status()
-        self.set_interval(1, self.initialize_update_lobby_status)
+        self.update_lobby_status()
+        self.set_interval(1, self.update_lobby_status)
 
     def on_button_pressed(self, event: Button.Pressed):
         event.button.disabled = True
         if event.button.id == "leave_lobby":
-            self.initialize_leave_lobby()
+            self.leave_lobby()
         else:
             event.button.disabled = False
     
-    @work(thread=True, exclusive=True)
-    def initialize_update_lobby_status(self):
-        response: dict = lib.lobby_state()
-        self.app.call_from_thread(self._update_lobby_status, response)
-
-    @work(thread=True, exclusive=True)
-    def initialize_leave_lobby(self):
-        response = lib.leave_lobby()
-        self.app.call_from_thread(self._validate_leave_lobby, response)
-
-    def _update_lobby_status(self, response):
-        #add check if game has started later
+    @work(exclusive=True)
+    async def update_lobby_status(self):
+        response: dict = await libhttpx.lobby_state()
         if response["ok"] and response["response"]:
             state = response["response"]
             players_str = ""
@@ -210,12 +189,16 @@ class Waiting(Screen):
         elif not response["ok"]:
             self.app.errror_notifications(response["error"])
 
-    def _validate_leave_lobby(self, response):
+    @work(exclusive=True)
+    async def leave_lobby(self):
+        response = await libhttpx.leave_lobby()
         if response["ok"]:
             self.app.pop_screen()
         else:
+            log("Couldnt leave lobby")
             self.app.error_notifications(response["error"])
         self.query_one("#leave_lobby").disabled = False
+
 
 class Game(Screen):
 
