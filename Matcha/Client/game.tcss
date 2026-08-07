@@ -8,3 +8,7 @@
     border: solid $accent;
     content-align: center middle;
 }
+
+#player_container {
+    overflow-y: auto
+}

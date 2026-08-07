@@ -214,6 +214,8 @@ class Game(Screen):
 
     CSS_PATH = "game.tcss"
 
+    #game_initializied = False
+
     def compose(self) -> ComposeResult:
         yield Header()
         yield Horizontal(
@@ -224,29 +226,31 @@ class Game(Screen):
             Static("Traps", id="traps"),
             id="game_stats"
             )
+        yield Vertical(id="player_container")
 
     def on_mount(self):
         self.initialize_game_state()
+        self.display_role()
+        self.setup_player_display()
         #self.initialize_game_state_update()
         #self.set_interval(5, self.initialize_game_state_update())
 
     def on_button_pressed(self, event):
         pass
 
-    @work(exclusive=True)
+    @work
     async def initialize_game_state(self):
         response = await libhttpx.get_players()
-        log(f"Reached initialize_game_state,")
+        log("Reached initialize_game_state,")
         if response["ok"]:
             players = response["response"]
             self.game_state = libhttpx.GameState(players)
             log(f"The current round is {self.game_state.number_moves}")
-            self.display_role()
             self.update_game_state()
             self.set_interval(3, self.update_game_state)
+            #self.game_initializied = True
         else:
             self.app.error_notifications(response["error"])
-            self.set
             #add logic to try again later
 
     @work
@@ -261,7 +265,7 @@ class Game(Screen):
     
     @work
     async def update_game_state(self):
-        log(f"Reached initialize update")
+        log("Reached initialize update")
         response = await libhttpx.get_state(starting=self.game_state.number_moves)
         if response["ok"]:
             new_moves = response["response"]
@@ -274,6 +278,19 @@ class Game(Screen):
             self.query_one("#traps").update(f"{self.game_state.traps}/{self.game_state.required_traps} Traps")
         else:
             self.app.error_notifications(response["error"])
+
+    @work
+    async def setup_player_display(self):
+        response = await libhttpx.get_players()
+        if response["ok"]:
+            players = response["response"]
+            player_container = self.query_one("#player_container")
+            for player in players:
+                player_container.mount(Horizontal(Static(f"{player}:", id="player"), id=player))
+                if player == libhttpx.get_username():
+                    player_container.query_one(f"#{player}").styles.border = ("solid", "blue")
+        else:
+            self.app.error_notifications()
 
 
 turquoise_greenery= Theme(
