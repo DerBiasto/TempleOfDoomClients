@@ -55,7 +55,7 @@ class LobbySelection(Screen):
         table.add_columns(("Name:", "name"), ("Players:", "players"), ("Capacity:", "capacity"))
         self.rendered_lobbies = {}
         self.update_lobby_list()
-        self.set_interval(30, self.update_lobby_list)
+        self.lobby_refresh_timer = self.set_interval(25, self.update_lobby_list)
 
     def set_interactibility(self, *, enable: bool):
         if enable:
@@ -67,7 +67,7 @@ class LobbySelection(Screen):
                 button.disabled = True
                 self.query_one(DataTable).can_focus = False
         
-    @work
+    @work(exclusive=True)
     async def update_lobby_list(self):
         response = await libhttpx.list_lobbies()
         table = self.query_one(DataTable)
@@ -82,7 +82,7 @@ class LobbySelection(Screen):
             for lobby_name in added_lobbies:
                 lobby_data = new_lobbies[lobby_name]
                 player_str = ", ".join(lobby_data["players"])
-                rows.append((lobby_name, player_str, f"{len(lobby_data["players"])}/{lobby_data["capacity"]}"))
+                rows.append((lobby_name, player_str, f"{len(lobby_data['players'])}/{lobby_data['capacity']}"))
             for lobby_name, player_str, capacity in rows:
                 table.add_row(lobby_name, player_str, capacity, key=lobby_name)
 
@@ -102,10 +102,12 @@ class LobbySelection(Screen):
             self.rendered_lobbies = new_lobbies
         else:
             self.app.error_notifications(response["error"])
+            self.set_interactibility(enable=True)
 
     @work(exclusive=True)
     async def lobby_creation(self, capacity):
         response = await libhttpx.create_lobby(capacity)
+        log(f"This was the response from lobby_creation(): {response}")
         if response["ok"]:
             self.app.push_screen(Waiting())
         else:
@@ -124,6 +126,7 @@ class LobbySelection(Screen):
     @work(exclusive=True)
     async def joining_lobby(self, lobby_name):
         response = await libhttpx.join_lobby(lobby_name)
+        log("in function joining_lobby")
         if response["ok"]:
             self.app.push_screen(Waiting())
         else:
@@ -132,13 +135,9 @@ class LobbySelection(Screen):
             else:
                 self.app.error_notifications(response["error"])
         self.set_interactibility(enable=True)
-
-    def on_select_changed(self, event: Select.Changed):
-        yield event.value
     
     def on_button_pressed(self, event: Button.Pressed):
         self.set_interactibility(enable=False)
-        self.query_one(DataTable).can_focus = False
         selected_capacity = self.query_one("#player_select").value
         if event.button.id == "new_lobby":
             self.lobby_creation(selected_capacity)
@@ -150,20 +149,26 @@ class LobbySelection(Screen):
         else:
             self.set_interactibility(enable=True)
 
-def on_data_table_row_selected(self, event):
+    def on_data_table_row_selected(self, event):
         self.set_interactibility(enable=False)
         selected_lobby = event.row_key.value
         self.joining_lobby(selected_lobby)
 
+    def _on_screen_suspend(self):
+        self.lobby_refresh_timer.pause()
+
+    def _on_screen_resume(self):
+        self.lobby_refresh_timer.resume()
+
 class Waiting(Screen):
     def compose(self) -> ComposeResult:
         yield Label("", id="lobby_status")
-        yield Label(content="", id="player_list")
+        yield Label("", id="player_list")
         yield Button(label="Leave Lobby", variant="warning", id="leave_lobby")
     
     def on_mount(self):
         self.update_lobby_status()
-        self.set_interval(1, self.update_lobby_status)
+        self.set_interval(10, self.update_lobby_status)
 
     def on_button_pressed(self, event: Button.Pressed):
         event.button.disabled = True
@@ -172,26 +177,31 @@ class Waiting(Screen):
         else:
             event.button.disabled = False
     
-    @work(exclusive=True)
+    @work(group="lobby_updates", exclusive=True)
     async def update_lobby_status(self):
         response: dict = await libhttpx.lobby_state()
         if response["ok"] and response["response"]:
             state = response["response"]
             players_str = ""
-            for player in state["players"]:
-                players_str += f"{player}\n"
+            #for player in state["players"]:
+            #    players_str += f"{player}\n"
+            
             n_players: int = len(state["players"])
             capacity: int = state["capacity"]
             players_to_start = capacity - n_players
             self.query_one("#lobby_status").update(f"The following players are currently waiting in the Lobby:\n{players_str}\n{players_to_start} are still needed for the game to start")
         elif response["ok"] and not response["response"]:
+            log("Response was ok and empty")
             self.app.switch_screen(Game())
         elif not response["ok"]:
-            self.app.errror_notifications(response["error"])
+            log("Response was not ok")
+            self.app.error_notifications(response["error"])
 
     @work(exclusive=True)
     async def leave_lobby(self):
+        self.workers.cancel_group(self, "lobby_updates")
         response = await libhttpx.leave_lobby()
+        log(f"This was the response from leave_lobby(): {response}")
         if response["ok"]:
             self.app.pop_screen()
         else:
@@ -223,29 +233,36 @@ class Game(Screen):
     def on_button_pressed(self, event):
         pass
 
-    @work(thread=True, exclusive=True)
-    def initialize_game_state(self):
-        response = lib.get_players()
-        self.app.call_from_thread(log, f"Reached initialize_game_state,")
+    @work(exclusive=True)
+    async def initialize_game_state(self):
+        response = await libhttpx.get_players()
+        log(f"Reached initialize_game_state,")
         if response["ok"]:
             players = response["response"]
-            self.app.call_from_thread(self._apply_game_state, players)
+            self.game_state = libhttpx.GameState(players)
+            log(f"The current round is {self.game_state.number_moves}")
+            self.display_role()
+            self.update_game_state()
+            self.set_interval(3, self.update_game_state)
         else:
-            self.app.call_from_thread(self.app.error_notifications, response["error"])
+            self.app.error_notifications(response["error"])
+            self.set
+            #add logic to try again later
 
-    @work(thread=True, exclusive=True)
-    def initialize_game_state_update(self):
-        self.app.call_from_thread(log, f"Reached initialize update")
-        response = lib.get_state(starting=self.game_state.number_moves)
-        self.app.call_from_thread(self._apply_game_state_update, response)
-
-    def _apply_game_state(self, players):
-        self.game_state = lib.GameState(players)
-        log(f"The current round is {self.game_state.number_moves}")
-        self.initialize_game_state_update()
-        self.set_interval(5, self.initialize_game_state_update)
-
-    def _apply_game_state_update(self, response):
+    @work
+    async def display_role(self):
+        response = await libhttpx.get_role()
+        if response["ok"]:
+            role = response["response"]
+            self.query_one("#role").update(f"Your Role: {role}")
+        else:
+            self.app.error_notifications(response["error"])
+            #add logic to try again later
+    
+    @work
+    async def update_game_state(self):
+        log(f"Reached initialize update")
+        response = await libhttpx.get_state(starting=self.game_state.number_moves)
         if response["ok"]:
             new_moves = response["response"]
             for move in new_moves:
@@ -258,7 +275,6 @@ class Game(Screen):
         else:
             self.app.error_notifications(response["error"])
 
-    #def _finalize_game_state(self):
 
 turquoise_greenery= Theme(
 	name="turquoise_greenery",

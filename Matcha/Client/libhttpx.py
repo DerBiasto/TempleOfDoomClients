@@ -39,62 +39,59 @@ async def post(path: str):
     except httpx.HTTPStatusError as e:
         return {"ok" : False, "error" : "HTTPError", "details" : str(e)}
 
-def create_example_game(n: int = 5):
-    return post(f"example_game/{n}")
+async def create_example_game(n: int = 5):
+    return await post(f"example_game/{n}")
 
-def get_players():
-    return get("game/get/players")
+async def get_players():
+    return await get("game/get/players")
 
-def get_state(starting: int =0):             # Returns moves that have been made since the n-th move
-    return get(f"game/get/state?starting={starting}")
+async def get_state(starting: int =0):             # Returns moves that have been made since the n-th move
+    return await get(f"game/get/state?starting={starting}")
 
 #Lobbies
 
-def list_lobbies():
-    return get("lobby/get")
+async def list_lobbies():
+    return await get("lobby/get")
 
-def join_lobby(name : str):
-    return post(f"lobby/join/{name}")
+async def join_lobby(name : str):
+    return await post(f"lobby/join/{name}")
 
-def create_lobby(n: int = 5):
-    return post(f"lobby/new/{n}")
+async def create_lobby(n: int = 5):
+    return await post(f"lobby/new/{n}")
 
-def leave_lobby():
-    answer = post("lobby/leave")
+async def leave_lobby():
+    answer = await post("lobby/leave")
     del client.cookies["game"]
     return answer
     #return post("lobby/leave")
 
-def lobby_state():
-    return get("lobby/state")
+async def lobby_state():
+    return await get("lobby/state")
 
 # Moves
 
-def choose(player_name):
-    return post(f"game/move/choose/{player_name}")
+async def choose(player_name):
+    return await post(f"game/move/choose/{player_name}")
 
-def announce(role, treasures, traps):
-    return post(f"game/move/announce?role={role}&treasures={treasures}&traps={traps}")
+async def announce(role, treasures, traps):
+    return await post(f"game/move/announce?role={role}&treasures={treasures}&traps={traps}")
 
-def get_role():
-    return get("game/my/role")
+async def get_role():
+    return await get("game/my/role")
 
-def get_cards():
-    return get("game/my/cards")
+async def get_cards():
+    return await get("game/my/cards")
 
-def health_check():
-    return get("health_check")
+async def health_check():
+    return await get("health_check")
 
 #Cookies
 
 def get_username():
-    return client.cookies["user"]
+    return client.cookies.get("user")
 
 def get_lobby_name():
     return client.cookies["game"]
-
-def start_player():
-    return get_players()[0]
 
 def total_traps_treasures(size):
     distribution = {
@@ -128,7 +125,7 @@ class GameState:
 
     def update(self, new_move: dict):
         self.number_moves += 1
-        self.moves += new_move
+        self.moves.append(new_move)
         if self.current_round != ceil(self.number_moves / (2 * self.size)):
             self.current_round = ceil(self.number_moves / (2 * self.size))
             self.current_announcements.clear()
