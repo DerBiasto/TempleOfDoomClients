@@ -231,7 +231,7 @@ class Game(Screen):
     def on_mount(self):
         self.initialize_game_state()
         self.display_role()
-        self.setup_player_display()
+        #self.setup_player_display()
         #self.initialize_game_state_update()
         #self.set_interval(5, self.initialize_game_state_update())
 
@@ -246,6 +246,7 @@ class Game(Screen):
             players = response["response"]
             self.game_state = libhttpx.GameState(players)
             log(f"The current round is {self.game_state.number_moves}")
+            self.setup_player_display()
             self.update_game_state()
             self.set_interval(3, self.update_game_state)
             #self.game_initializied = True
@@ -281,16 +282,13 @@ class Game(Screen):
 
     @work
     async def setup_player_display(self):
-        response = await libhttpx.get_players()
-        if response["ok"]:
-            players = response["response"]
-            player_container = self.query_one("#player_container")
-            for player in players:
-                player_container.mount(Horizontal(Static(f"{player}:", id="player"), id=player))
-                if player == libhttpx.get_username():
-                    player_container.query_one(f"#{player}").styles.border = ("solid", "blue")
-        else:
-            self.app.error_notifications()
+        log(f"now in setup_player_display(), Game state is now {self.game_state.players}")
+        players = self.game_state.players
+        player_container = self.query_one("#player_container")
+        for player in players:
+            player_container.mount(Horizontal(Static(f"{player}:", id="player"), id=player))
+            if player == libhttpx.get_username():
+                player_container.query_one(f"#{player}").add_class("myself")
 
 
 turquoise_greenery= Theme(
@@ -355,7 +353,7 @@ class TempleOfDoom(App):
         self.register_theme(turquoise_greenery)
         self.register_theme(turquoise_ocean_theme)
         self.register_theme(pulse_inspired_theme)
-        self.theme = "pulse_inspired_theme"
+        self.theme = "dracula"
         self.push_screen(LobbySelection())
 
 if __name__ == "__main__":

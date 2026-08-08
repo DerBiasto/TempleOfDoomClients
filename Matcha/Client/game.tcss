@@ -1,14 +1,22 @@
 #game_stats {
-    background: $background;
+    background: $secondary-background-darken-2;
     height: auto;
 }
 
 #game_stats Static {
     width: 1fr;
-    border: solid $accent;
+    /*border: solid $secondary-lighten-2;*/
     content-align: center middle;
 }
 
 #player_container {
-    overflow-y: auto
+    overflow-y: auto;
+}
+
+#player_container Horizontal {
+    border: solid $primary;
+}
+
+#player_container Horizontal.myself {
+    border: heavy $accent;
 }
